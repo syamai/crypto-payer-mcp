@@ -38,12 +38,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anthropics/crypto-payer-mcp.git"
+    "url": "git+https://github.com/syamai/crypto-payer-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/anthropics/crypto-payer-mcp/issues"
+    "url": "https://github.com/syamai/crypto-payer-mcp/issues"
   },
-  "homepage": "https://github.com/anthropics/crypto-payer-mcp#readme",
+  "homepage": "https://github.com/syamai/crypto-payer-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^3.22.0"

@@ -1,7 +1,7 @@
 # Crypto Payer MCP Server
 
 [![npm version](https://badge.fury.io/js/crypto-payer-mcp.svg)](https://www.npmjs.com/package/crypto-payer-mcp)
-[![CI](https://github.com/anthropics/crypto-payer-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/anthropics/crypto-payer-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/syamai/crypto-payer-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/syamai/crypto-payer-mcp/actions/workflows/ci.yml)
 
 MCP (Model Context Protocol) Server for [Crypto Payer Solution](https://bclass-solution.com) - cryptocurrency payment integration.
 
@@ -158,7 +158,7 @@ Output: {
 
 ```bash
 # Clone the repository
-git clone https://github.com/anthropics/crypto-payer-mcp.git
+git clone https://github.com/syamai/crypto-payer-mcp.git
 cd crypto-payer-mcp
 
 # Install dependencies

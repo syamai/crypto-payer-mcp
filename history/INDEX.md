@@ -2,7 +2,7 @@
 
 ## 세션 기록 목록
 
-### 1. [2026-01-08] Crypto Payer MCP 프로젝트 초기화
+### 1. [2026-01-08 16:30] Crypto Payer MCP 프로젝트 초기화
 **파일**: `2026-01-08_16-30_Crypto-Payer-MCP-Project-Initialization.md`
 
 **작업 내용**:
@@ -23,15 +23,39 @@
 
 ---
 
+### 2. [2026-01-08 09:23] Package Publishing 및 CI/CD 설정
+**파일**: `2026-01-08_09-23_Package-Publishing-Setup.md`
+
+**작업 내용**:
+- npm 공개 배포를 위한 package.json 업데이트
+  - Scoped package 이름 설정 (@anthropic-ai/crypto-payer-mcp)
+  - 배포 파일 목록 지정
+  - 저자, Repository, Homepage 정보 추가
+- MIT 라이선스 파일 생성
+- GitHub Actions CI 워크플로우 구성
+  - Node.js 18.x, 20.x, 22.x 다중 버전 테스트
+  - 자동 타입 검사, 빌드, MCP 서버 시작 테스트
+
+**주요 성과**:
+- ✅ npm 공개 배포 준비 완료
+- ✅ MIT 라이선스 추가
+- ✅ GitHub Actions CI 파이프라인 구성
+- ✅ 다중 Node.js 버전 호환성 검증
+
+**타임스탐프**: 2026-01-08 09:23:00 (KST)
+
+---
+
 ## 통계
 
 | 항목 | 수량 |
 |------|------|
-| 총 세션 기록 | 1개 |
-| 생성된 파일 | 8개 |
+| 총 세션 기록 | 2개 |
+| 생성된 파일 | 10개 (LICENSE, CI 워크플로우 포함) |
 | 구현된 Tool | 6개 |
 | 코드 라인 수 (src) | ~400줄 |
 | 빌드 상태 | ✅ 성공 |
+| CI/CD 파이프라인 | ✅ 구성 완료 |
 
 ---
 
@@ -68,4 +92,4 @@ crypto-payer-mcp/
 
 ---
 
-마지막 업데이트: 2026-01-08 16:31 (KST)
+마지막 업데이트: 2026-01-08 09:23 (KST)
