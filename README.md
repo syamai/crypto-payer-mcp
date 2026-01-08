@@ -7,20 +7,36 @@ MCP (Model Context Protocol) Server for [Crypto Payer Solution](https://bclass-s
 
 ## Quick Start
 
-### Using npx (Recommended)
+### 1. Create Configuration File
+
+Create `.env` file in one of these locations:
 
 ```bash
-npx crypto-payer-mcp
+# Option 1: Home directory (recommended)
+~/.crypto-payer-mcp.env
+
+# Option 2: XDG config directory
+~/.config/crypto-payer-mcp/.env
+
+# Option 3: Current working directory
+./.env
 ```
 
-### Global Installation
+**Example `.env` file:**
 
 ```bash
-npm install -g crypto-payer-mcp
-crypto-payer-mcp
+# Required
+CRYPTO_PAYER_OPERATOR_ID=your-operator-id
+CRYPTO_PAYER_SECRET_KEY=your-secret-key
+CRYPTO_PAYER_OPERATOR_NAME=Your Operator Name
+CRYPTO_PAYER_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIICIjAN...\n-----END PUBLIC KEY-----"
+
+# Optional (defaults to testnet)
+CRYPTO_PAYER_API_URL=https://dev-api.bclass-solution.com/v1
+CRYPTO_PAYER_DOMAIN_URL=https://dev-front.bclass-solution.com
 ```
 
-## Claude Desktop Configuration
+### 2. Configure Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
@@ -29,17 +45,38 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
   "mcpServers": {
     "crypto-payer": {
       "command": "npx",
+      "args": ["-y", "crypto-payer-mcp"]
+    }
+  }
+}
+```
+
+That's it! The server automatically loads configuration from your `.env` file.
+
+### Advanced: Custom .env Path
+
+```json
+{
+  "mcpServers": {
+    "crypto-payer": {
+      "command": "npx",
       "args": ["-y", "crypto-payer-mcp"],
       "env": {
-        "CRYPTO_PAYER_OPERATOR_ID": "your-operator-id",
-        "CRYPTO_PAYER_SECRET_KEY": "your-secret-key",
-        "CRYPTO_PAYER_PUBLIC_KEY": "-----BEGIN PUBLIC KEY-----\nMIICIjAN...\n-----END PUBLIC KEY-----",
-        "CRYPTO_PAYER_OPERATOR_NAME": "Your Operator Name"
+        "CRYPTO_PAYER_ENV_FILE": "/path/to/your/.env"
       }
     }
   }
 }
 ```
+
+## Configuration File Locations
+
+The server searches for `.env` file in this order:
+
+1. `CRYPTO_PAYER_ENV_FILE` environment variable (if set)
+2. `./.env` (current working directory)
+3. `~/.crypto-payer-mcp.env` (home directory)
+4. `~/.config/crypto-payer-mcp/.env` (XDG config)
 
 ## Available Tools
 
@@ -50,7 +87,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 | `verify_webhook` | Verify webhook signature (RSA-SHA512) |
 | `build_payment_url` | Build payment page URL |
 | `parse_webhook_event` | Parse webhook event data |
-| `get_config` | Get current configuration (masked) |
+| `get_config` | Get current configuration (shows loaded .env path) |
 
 ## Environment Variables
 
@@ -62,6 +99,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 | `CRYPTO_PAYER_OPERATOR_NAME` | Yes | Your operator display name |
 | `CRYPTO_PAYER_API_URL` | No | API URL (default: testnet) |
 | `CRYPTO_PAYER_DOMAIN_URL` | No | Domain URL (default: testnet) |
+| `CRYPTO_PAYER_ENV_FILE` | No | Custom path to .env file |
 
 ## API Endpoints
 
@@ -72,7 +110,21 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
 ## Usage Examples
 
-### 1. Request Payment
+### 1. Check Configuration
+
+```
+Tool: get_config
+
+Output: {
+  "envFile": "/Users/you/.crypto-payer-mcp.env",
+  "platformApiUrl": "https://dev-api.bclass-solution.com/v1",
+  "operatorId": "260f52c4...",
+  "operatorSecretKey": "****",
+  "isConfigured": true
+}
+```
+
+### 2. Request Payment
 
 ```
 Tool: request_payment
@@ -84,18 +136,18 @@ Output: {
 }
 ```
 
-### 2. Build Payment URL
+### 3. Build Payment URL
 
 ```
 Tool: build_payment_url
 Input: { "paymentId": "eGrtTN7mIHTtd0uNLGnPweKtz2qXcVoq" }
 
 Output: {
-  "url": "https://dev-front.bclass-solution.com?paymentId=eGrtTN7mIHTtd0uNLGnPweKtz2qXcVoq&id=xxx&name=xxx"
+  "url": "https://dev-front.bclass-solution.com?paymentId=xxx&id=xxx&name=xxx"
 }
 ```
 
-### 3. Verify Webhook
+### 4. Verify Webhook
 
 ```
 Tool: verify_webhook
@@ -111,7 +163,7 @@ Input: {
 Output: { "isValid": true, "event": "DEPOSIT_COMPLETED", "message": "Signature verified" }
 ```
 
-### 4. Parse Webhook Event
+### 5. Parse Webhook Event
 
 ```
 Tool: parse_webhook_event
@@ -121,11 +173,7 @@ Input: {
     "timestamp": 1746776884590,
     "data": {
       "user": { "id": "user_123", "name": "john" },
-      "result": {
-        "id": "tx_abc",
-        "amount": { "amount": "100", ... },
-        "instrument": { "symbol": "USDT", ... }
-      }
+      "result": { "id": "tx_abc", "amount": { "amount": "100" }, "instrument": { "symbol": "USDT" } }
     }
   }
 }
@@ -163,6 +211,10 @@ cd crypto-payer-mcp
 
 # Install dependencies
 npm install
+
+# Create local .env for testing
+cp .env.example .env
+# Edit .env with your credentials
 
 # Build
 npm run build

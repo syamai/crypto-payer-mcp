@@ -11,6 +11,38 @@
  * - Building payment URLs
  */
 
+import { existsSync } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
+import { config as dotenvConfig } from 'dotenv';
+
+// Load .env file from multiple possible locations
+function loadEnvFile(): string | null {
+  const envPaths = [
+    // 1. Custom path from environment variable
+    process.env.CRYPTO_PAYER_ENV_FILE,
+    // 2. Current working directory
+    join(process.cwd(), '.env'),
+    // 3. Home directory with specific name
+    join(homedir(), '.crypto-payer-mcp.env'),
+    // 4. Home directory .config folder
+    join(homedir(), '.config', 'crypto-payer-mcp', '.env'),
+  ].filter(Boolean) as string[];
+
+  for (const envPath of envPaths) {
+    if (existsSync(envPath)) {
+      dotenvConfig({ path: envPath });
+      return envPath;
+    }
+  }
+
+  // Fallback: try default dotenv behavior
+  dotenvConfig();
+  return null;
+}
+
+const loadedEnvPath = loadEnvFile();
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -417,6 +449,7 @@ function handleParseWebhookEvent(webhookBody: WebhookEvent): {
 }
 
 function handleGetConfig(): {
+  envFile: string;
   platformApiUrl: string;
   platformDomainUrl: string;
   operatorId: string;
@@ -428,6 +461,7 @@ function handleGetConfig(): {
   const config = getConfig();
 
   return {
+    envFile: loadedEnvPath || '(not found - using environment variables)',
     platformApiUrl: config.platformApiUrl,
     platformDomainUrl: config.platformDomainUrl,
     operatorId: config.operatorId ? `${config.operatorId.slice(0, 8)}...` : '(not set)',

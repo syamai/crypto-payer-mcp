@@ -46,6 +46,7 @@
   "homepage": "https://github.com/syamai/crypto-payer-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "dotenv": "^17.2.3",
     "zod": "^3.22.0"
   },
   "devDependencies": {
