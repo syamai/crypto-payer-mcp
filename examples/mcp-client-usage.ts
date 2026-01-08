@@ -1,250 +1,230 @@
 /**
- * Example: MCP Client Usage
+ * Example: MCP Tool Usage
  *
- * This demonstrates how to use the Crypto Payer MCP server
- * programmatically from a Node.js application.
+ * This demonstrates how to call MCP tools directly using JSON-RPC.
+ * In practice, Claude Desktop handles this automatically.
  *
- * In practice, Claude Desktop or other MCP clients handle this automatically.
- * This example is for understanding the flow and testing.
- *
- * Run: npx ts-node examples/mcp-client-usage.ts
+ * Run: npm run example:client
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { spawn } from 'child_process';
+import { createInterface } from 'readline';
 
 // ===========================================
-// MCP Client Setup
+// MCP JSON-RPC Helper
 // ===========================================
 
-async function createMCPClient(): Promise<Client> {
-  // Spawn the MCP server process
-  const serverProcess = spawn('node', ['dist/index.js'], {
-    env: {
-      ...process.env,
-      // You can set env vars here or use .env file
-      // CRYPTO_PAYER_OPERATOR_ID: 'your-id',
-      // CRYPTO_PAYER_SECRET_KEY: 'your-secret',
-    },
-  });
-
-  const transport = new StdioClientTransport({
-    command: 'node',
-    args: ['dist/index.js'],
-  });
-
-  const client = new Client({
-    name: 'example-client',
-    version: '1.0.0',
-  });
-
-  await client.connect(transport);
-  return client;
+interface JsonRpcRequest {
+  jsonrpc: '2.0';
+  id: number;
+  method: string;
+  params?: Record<string, unknown>;
 }
 
-// ===========================================
-// Example: Complete Payment Flow
-// ===========================================
+interface JsonRpcResponse {
+  jsonrpc: '2.0';
+  id: number;
+  result?: unknown;
+  error?: { code: number; message: string };
+}
 
-async function examplePaymentFlow() {
-  console.log('='.repeat(60));
-  console.log('Crypto Payer MCP - Payment Flow Example');
-  console.log('='.repeat(60));
+class MCPClient {
+  private process: ReturnType<typeof spawn>;
+  private requestId = 0;
+  private pendingRequests = new Map<number, {
+    resolve: (value: unknown) => void;
+    reject: (error: Error) => void;
+  }>();
 
-  const client = await createMCPClient();
-
-  try {
-    // Step 1: Check configuration
-    console.log('\n📋 Step 1: Check configuration');
-    const configResult = await client.callTool({
-      name: 'get_config',
-      arguments: {},
+  constructor() {
+    this.process = spawn('node', ['dist/index.js'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
-    console.log('Config:', JSON.parse((configResult.content[0] as { text: string }).text));
 
-    // Step 2: Request payment session
-    console.log('\n💳 Step 2: Request payment session');
-    const paymentResult = await client.callTool({
-      name: 'request_payment',
-      arguments: {
-        userAccessToken: 'user-token-123', // From your auth system
-      },
+    const rl = createInterface({ input: this.process.stdout! });
+    rl.on('line', (line) => {
+      try {
+        const response: JsonRpcResponse = JSON.parse(line);
+        const pending = this.pendingRequests.get(response.id);
+        if (pending) {
+          this.pendingRequests.delete(response.id);
+          if (response.error) {
+            pending.reject(new Error(response.error.message));
+          } else {
+            pending.resolve(response.result);
+          }
+        }
+      } catch {
+        // Ignore non-JSON lines (like stderr messages)
+      }
     });
-    const paymentResponse = JSON.parse((paymentResult.content[0] as { text: string }).text);
-    console.log('Payment response:', paymentResponse);
-
-    if (paymentResponse.result && paymentResponse.data?.paymentId) {
-      // Step 3: Build payment URL
-      console.log('\n🔗 Step 3: Build payment URL');
-      const urlResult = await client.callTool({
-        name: 'build_payment_url',
-        arguments: {
-          paymentId: paymentResponse.data.paymentId,
-        },
-      });
-      const urlResponse = JSON.parse((urlResult.content[0] as { text: string }).text);
-      console.log('Payment URL:', urlResponse.url);
-      console.log('\n→ Redirect user to this URL to complete payment');
-    }
-
-  } catch (error) {
-    console.error('Error:', error);
-  } finally {
-    await client.close();
   }
-}
 
-// ===========================================
-// Example: Verify Webhook
-// ===========================================
-
-async function exampleWebhookVerification() {
-  console.log('\n' + '='.repeat(60));
-  console.log('Crypto Payer MCP - Webhook Verification Example');
-  console.log('='.repeat(60));
-
-  const client = await createMCPClient();
-
-  try {
-    // Example webhook payload (as received from PLATFORM)
-    const webhookBody = {
-      event: 'DEPOSIT_COMPLETED',
-      timestamp: Date.now(),
-      data: {
-        user: {
-          id: 'user_123',
-          name: 'john_doe',
-        },
-        result: {
-          id: 'tx_abc123',
-          amount: {
-            amount: '100.00',
-            requestedAmount: '100.00',
-            netAmount: '100.00',
-          },
-          network: {
-            networkId: 'eth-mainnet',
-            symbol: 'ETH',
-            name: 'Ethereum',
-          },
-          instrument: {
-            symbol: 'USDT',
-            name: 'Tether USD',
-            contractAddress: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
-          },
-          transactionHash: '0xabc123...',
-          explorerUrl: 'https://etherscan.io/tx/0xabc123...',
-        },
-      },
+  async request(method: string, params?: Record<string, unknown>): Promise<unknown> {
+    const id = ++this.requestId;
+    const request: JsonRpcRequest = {
+      jsonrpc: '2.0',
+      id,
+      method,
+      params,
     };
 
-    // Verify webhook signature
-    console.log('\n🔐 Verifying webhook signature...');
-    const verifyResult = await client.callTool({
-      name: 'verify_webhook',
-      arguments: {
-        signature: 'example-base64-signature', // From x-payer-signature header
-        webhookBody,
-      },
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(id, { resolve, reject });
+      this.process.stdin!.write(JSON.stringify(request) + '\n');
     });
-    console.log('Verification result:', JSON.parse((verifyResult.content[0] as { text: string }).text));
-
-    // Parse webhook event
-    console.log('\n📦 Parsing webhook event...');
-    const parseResult = await client.callTool({
-      name: 'parse_webhook_event',
-      arguments: {
-        webhookBody,
-      },
-    });
-    const parsed = JSON.parse((parseResult.content[0] as { text: string }).text);
-    console.log('Parsed event:', parsed);
-
-    console.log(`
-📊 Event Summary:
-   Type: ${parsed.eventType}
-   Category: ${parsed.category}
-   Status: ${parsed.status}
-   User: ${parsed.user?.name} (${parsed.user?.id})
-   Amount: ${parsed.amount?.amount} ${parsed.amount?.currency}
-   Network: ${parsed.amount?.network}
-   TX Hash: ${parsed.blockchain?.txHash}
-`);
-
-  } catch (error) {
-    console.error('Error:', error);
-  } finally {
-    await client.close();
   }
-}
 
-// ===========================================
-// Example: Generate Auth Header
-// ===========================================
+  async callTool(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
+    const result = await this.request('tools/call', {
+      name,
+      arguments: args,
+    }) as { content: Array<{ type: string; text: string }> };
 
-async function exampleAuthHeader() {
-  console.log('\n' + '='.repeat(60));
-  console.log('Crypto Payer MCP - Auth Header Generation Example');
-  console.log('='.repeat(60));
-
-  const client = await createMCPClient();
-
-  try {
-    // Generate auth header using .env credentials
-    console.log('\n🔑 Generating X-Operator-Authorization header...');
-    const result = await client.callTool({
-      name: 'generate_auth_header',
-      arguments: {},
-    });
-    const authResponse = JSON.parse((result.content[0] as { text: string }).text);
-
-    if (authResponse.authHeader) {
-      console.log('Auth header generated successfully!');
-      console.log('Header value:', authResponse.authHeader.substring(0, 50) + '...');
-      console.log(`
-Use this header in your API requests to PLATFORM:
-  headers: {
-    'X-Operator-Authorization': '${authResponse.authHeader.substring(0, 30)}...',
-    'X-Operator-Id': 'your-operator-id',
-    'X-User-Authorization': 'user-access-token'
-  }
-`);
-    } else {
-      console.log('Error:', authResponse.error);
+    if (result.content?.[0]?.text) {
+      return JSON.parse(result.content[0].text);
     }
+    return result;
+  }
 
-  } catch (error) {
-    console.error('Error:', error);
-  } finally {
-    await client.close();
+  async listTools(): Promise<unknown> {
+    return this.request('tools/list');
+  }
+
+  close() {
+    this.process.kill();
   }
 }
 
 // ===========================================
-// Run Examples
+// Example Functions
+// ===========================================
+
+async function example1_CheckConfig(client: MCPClient) {
+  console.log('\n' + '='.repeat(50));
+  console.log('Example 1: Check Configuration');
+  console.log('='.repeat(50));
+
+  const config = await client.callTool('get_config');
+  console.log('\nConfiguration:');
+  console.log(JSON.stringify(config, null, 2));
+}
+
+async function example2_GenerateAuthHeader(client: MCPClient) {
+  console.log('\n' + '='.repeat(50));
+  console.log('Example 2: Generate Auth Header');
+  console.log('='.repeat(50));
+
+  const result = await client.callTool('generate_auth_header');
+  console.log('\nAuth Header:');
+  console.log(JSON.stringify(result, null, 2));
+}
+
+async function example3_BuildPaymentUrl(client: MCPClient) {
+  console.log('\n' + '='.repeat(50));
+  console.log('Example 3: Build Payment URL');
+  console.log('='.repeat(50));
+
+  const result = await client.callTool('build_payment_url', {
+    paymentId: 'test-payment-id-12345',
+  });
+  console.log('\nPayment URL:');
+  console.log(JSON.stringify(result, null, 2));
+}
+
+async function example4_ParseWebhookEvent(client: MCPClient) {
+  console.log('\n' + '='.repeat(50));
+  console.log('Example 4: Parse Webhook Event');
+  console.log('='.repeat(50));
+
+  const webhookBody = {
+    event: 'DEPOSIT_COMPLETED',
+    timestamp: Date.now(),
+    data: {
+      user: {
+        id: 'user_123',
+        name: 'john_doe',
+      },
+      result: {
+        id: 'tx_abc123',
+        amount: {
+          amount: '100.00',
+          requestedAmount: '100.00',
+          netAmount: '100.00',
+        },
+        network: {
+          networkId: 'eth-mainnet',
+          symbol: 'ETH',
+          name: 'Ethereum',
+        },
+        instrument: {
+          symbol: 'USDT',
+          name: 'Tether USD',
+          contractAddress: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+        },
+        transactionHash: '0xabc123def456...',
+        explorerUrl: 'https://etherscan.io/tx/0xabc123def456...',
+      },
+    },
+  };
+
+  const result = await client.callTool('parse_webhook_event', { webhookBody });
+  console.log('\nParsed Event:');
+  console.log(JSON.stringify(result, null, 2));
+}
+
+async function example5_VerifyWebhook(client: MCPClient) {
+  console.log('\n' + '='.repeat(50));
+  console.log('Example 5: Verify Webhook Signature');
+  console.log('='.repeat(50));
+
+  const webhookBody = {
+    event: 'DEPOSIT_COMPLETED',
+    timestamp: Date.now(),
+    data: {
+      user: { id: 'user_123', name: 'john_doe' },
+      result: { id: 'tx_abc123' },
+    },
+  };
+
+  const result = await client.callTool('verify_webhook', {
+    signature: 'invalid-test-signature',
+    webhookBody,
+  });
+  console.log('\nVerification Result:');
+  console.log(JSON.stringify(result, null, 2));
+}
+
+// ===========================================
+// Main
 // ===========================================
 
 async function main() {
-  const args = process.argv.slice(2);
-  const example = args[0] || 'all';
+  console.log('╔══════════════════════════════════════════════════╗');
+  console.log('║     Crypto Payer MCP - Client Usage Examples     ║');
+  console.log('╚══════════════════════════════════════════════════╝');
 
-  switch (example) {
-    case 'payment':
-      await examplePaymentFlow();
-      break;
-    case 'webhook':
-      await exampleWebhookVerification();
-      break;
-    case 'auth':
-      await exampleAuthHeader();
-      break;
-    case 'all':
-    default:
-      await examplePaymentFlow();
-      await exampleWebhookVerification();
-      await exampleAuthHeader();
+  const client = new MCPClient();
+
+  // Wait for server to initialize
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
+  try {
+    await example1_CheckConfig(client);
+    await example2_GenerateAuthHeader(client);
+    await example3_BuildPaymentUrl(client);
+    await example4_ParseWebhookEvent(client);
+    await example5_VerifyWebhook(client);
+
+    console.log('\n' + '='.repeat(50));
+    console.log('All examples completed!');
+    console.log('='.repeat(50));
+
+  } catch (error) {
+    console.error('Error:', error);
+  } finally {
+    client.close();
   }
 }
 
-main().catch(console.error);
+main();
